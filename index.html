@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>15-Min Bodyweight Circuit</title>
+
+  <!-- Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Theme & icons -->
+  <meta name="theme-color" content="#ff7a18">
+  <style>
+    :root{
+      --accent: #ff7a18;
+      --bg: #ffffff;
+      --muted: #555;
+      --card-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      --radius: 14px;
+      --big: 56px;
+      --tiny: 12px;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    body{background:linear-gradient(180deg,#fff 0%, #fff7f2 100%);color:#111;display:flex;align-items:flex-start;justify-content:center;padding:22px 14px;}
+    .app{width:100%;max-width:480px;background:var(--bg);border-radius:18px;padding:18px;box-shadow:var(--card-shadow);}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+    h1{font-size:20px;margin:0;color:#111}
+    .meta{font-size:12px;color:var(--muted);margin-top:4px}
+    .card{background:#fff;border-radius:12px;padding:14px;margin-top:12px;box-shadow:var(--card-shadow)}
+    .row{display:flex;align-items:center;justify-content:space-between}
+    .exercise-name{font-weight:700;font-size:18px}
+    .instr{font-size:13px;color:var(--muted);margin-top:6px}
+    .timer{font-weight:700;font-size:var(--big);color:var(--accent);text-align:center;margin:6px 0}
+    .controls{display:flex;gap:8px;justify-content:center;margin-top:8px}
+    .btn{background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;border:0;font-weight:700;box-shadow:0 6px 12px rgba(255,122,24,0.12)}
+    .btn.secondary{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+    .small{font-size:13px;padding:8px 10px;border-radius:10px}
+    .progress{height:8px;background:#ffe7d8;border-radius:8px;overflow:hidden;margin-top:10px}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffb66b);width:0%}
+    .footer{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
+    .round-badge{background:#fff7f2;border:1px solid #ffecd9;color:var(--accent);padding:6px 10px;border-radius:999px;font-weight:700}
+    .toprow{display:flex;justify-content:space-between;align-items:center}
+    .small-note{font-size:12px;color:var(--muted);margin-top:10px}
+    /* Mobile safe spacing for tall phones */
+    @media (max-height:700px){
+      :root{--big:48px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="15 minute bodyweight workout">
+    <header>
+      <div>
+        <h1>15-Min Bodyweight Circuit</h1>
+        <div class="meta">40 sec work / 20 sec rest • 3 rounds • No equipment</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div class="round-badge" id="roundIndicator">Round 1/3</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Exercise <span id="exIndex">1</span>/<span id="exTotal">12</span></div>
+      </div>
+    </header>
+
+    <div class="card" id="exerciseCard">
+      <div class="toprow">
+        <div>
+          <div class="exercise-name" id="exName">Burpees</div>
+          <div class="instr" id="exInstr">Explosive full-body move. Jump, squat, push-up, repeat.</div>
+        </div>
+        <div style="width:86px;text-align:center">
+          <div style="font-size:12px;color:var(--muted)">Time</div>
+          <div class="timer" id="timer">40</div>
+        </div>
+      </div>
+
+      <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+
+      <div class="controls">
+        <button class="btn small" id="startBtn">Start</button>
+        <button class="btn small secondary" id="pauseBtn" disabled>Pause</button>
+        <button class="btn small secondary" id="nextBtn" disabled>Next</button>
+        <button class="btn small secondary" id="restartBtn">Restart</button>
+      </div>
+
+      <div class="small-note" id="statusLine">Ready to go — tap Start.</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700">Round Plan</div>
+        <div style="font-size:13px;color:var(--muted)">Auto advance on timeout</div>
+      </div>
+      <ol style="margin-top:8px;padding-left:18px;color:var(--muted);font-size:14px">
+        <li>Round 1 — Burpees, High Knees, Jump Squats, Mountain Climbers (40s each). Rest 60s</li>
+        <li>Round 2 — Push-ups, Plank-to-Push-up, Reverse Lunges, Bicycle Crunches (40s each). Rest 60s</li>
+        <li>Round 3 — Burpee+JumpSquat, Mountain Climbers, High Knees, Plank Hold (40s each)</li>
+      </ol>
+      <div class="footer">Add to Home Screen for full app feel (use browser menu → Add to Home Screen).</div>
+    </div>
+  </div>
+
+<script>
+/*
+  Workout PWA app
+  - uses WebAudio to play a chime
+  - auto-advances exercises and rounds
+  - supports pause/resume/next/restart
+*/
+
+const WORK_SEC = 40;
+const REST_SEC = 20;
+const BETWEEN_ROUND_REST = 60;
+
+// Workout list: array of {name, duration (sec), instr, type: 'work'|'rest'}
+const rounds = [
+  [
+    {name:'Burpees', instr:'Explosive full-body move. Jump, squat, push-up, repeat.', duration:WORK_SEC},
+    {name:'High Knees', instr:'Run in place, knees to chest, pump arms fast.', duration:WORK_SEC},
+    {name:'Jump Squats', instr:'Land softly, keep chest up.', duration:WORK_SEC},
+    {name:'Mountain Climbers', instr:'Drive knees under chest; stay on the balls of your feet.', duration:WORK_SEC}
+  ],
+  [
+    {name:'Push-ups', instr:'Full range if possible; modify on knees if needed.', duration:WORK_SEC},
+    {name:'Plank-to-Push-up', instr:'From forearm plank, press up to hands and back down.', duration:WORK_SEC},
+    {name:'Reverse Lunges', instr:'Step one leg back, lower your knee, return to standing. Alternate legs.', duration:WORK_SEC},
+    {name:'Bicycle Crunches', instr:'Twist shoulder toward opposite knee.', duration:WORK_SEC}
+  ],
+  [
+    {name:'Burpee + Jump Squat combo', instr:'Burpee into immediate jump squat; controlled landings.', duration:WORK_SEC},
+    {name:'Mountain Climbers', instr:'Drive knees under chest; stay on the balls of your feet.', duration:WORK_SEC},
+    {name:'High Knees', instr:'Run in place, knees to chest, pump arms fast.', duration:WORK_SEC},
+    {name:'Plank Hold', instr:'Push through shoulders, tighten core.', duration:WORK_SEC}
+  ]
+];
+
+// Flattened timeline with between-round rests inserted
+let timeline = [];
+rounds.forEach((r,ri)=>{
+  r.forEach(item=> timeline.push({...item, round:ri+1}));
+  if(ri < rounds.length-1){
+    timeline.push({name:'Rest', instr:'Rest and recover', duration:BETWEEN_ROUND_REST, round:ri+1, rest:true});
+  }
+});
+
+// UI elements
+const exName = document.getElementById('exName');
+const exInstr = document.getElementById('exInstr');
+const timerEl = document.getElementById('timer');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const nextBtn = document.getElementById('nextBtn');
+const restartBtn = document.getElementById('restartBtn');
+const statusLine = document.getElementById('statusLine');
+const progressBar = document.getElementById('progressBar');
+const roundIndicator = document.getElementById('roundIndicator');
+const exIndex = document.getElementById('exIndex');
+const exTotal = document.getElementById('exTotal');
+
+let currentIndex = 0;
+let remaining = timeline[0].duration;
+let running = false;
+let intervalId = null;
+exTotal.textContent = timeline.length;
+
+// WebAudio chime (short pleasant chime)
+function playChime(){
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.connect(ctx.destination);
+
+    // Layer several oscillators for a bell-like sound
+    const freqs = [880, 1320, 1760];
+    freqs.forEach((f,i)=>{
+      const osc = ctx.createOscillator();
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 4000 - i*800;
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      osc.connect(filt);
+      filt.connect(g);
+      osc.start(now);
+      osc.stop(now + 0.55);
+    });
+
+    // Envelope
+    g.gain.linearRampToValueAtTime(0.12, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+  } catch(e){
+    // fallback - do nothing
+    // console.log('Audio not available', e);
+  }
+}
+
+function updateUI(){
+  const item = timeline[currentIndex];
+  exName.textContent = item.name;
+  exInstr.textContent = item.instr;
+  timerEl.textContent = remaining;
+  // progress
+  const pct = ((item.duration - remaining) / item.duration) * 100;
+  progressBar.style.width = `${pct}%`;
+  roundIndicator.textContent = item.rest ? `Rest (after R${item.round})` : `Round ${item.round}/${rounds.length}`;
+  exIndex.textContent = currentIndex + 1;
+  // status
+  statusLine.textContent = running ? (item.rest ? 'Resting...' : 'Working — keep it up!') : 'Paused / Ready';
+  // enable/disable buttons
+  startBtn.disabled = running;
+  pauseBtn.disabled = !running;
+  nextBtn.disabled = false;
+}
+
+function goToIndex(i, autoStart=false){
+  if(i < 0) i = 0;
+  if(i >= timeline.length){
+    // finished
+    currentIndex = timeline.length;
+    exName.textContent = 'Workout Complete!';
+    exInstr.textContent = 'Great job — you finished the session.';
+    timerEl.textContent = '0';
+    progressBar.style.width = '100%';
+    roundIndicator.textContent = 'Complete';
+    statusLine.textContent = 'Workout Complete';
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    nextBtn.disabled = true;
+    stopTicker();
+    return;
+  }
+  currentIndex = i;
+  remaining = timeline[currentIndex].duration;
+  updateUI();
+  if(autoStart) startTicker();
+}
+
+function tick(){
+  if(!running) return;
+  remaining = Math.max(0, remaining - 1);
+  updateUI();
+  if(remaining <= 0){
+    playChime();
+    // auto advance
+    goToIndex(currentIndex + 1, true);
+  }
+}
+
+function startTicker(){
+  if(running) return;
+  running = true;
+  updateUI();
+  intervalId = setInterval(tick, 1000);
+}
+
+function stopTicker(){
+  running = false;
+  if(intervalId) clearInterval(intervalId);
+  intervalId = null;
+  updateUI();
+}
+
+// Buttons
+startBtn.addEventListener('click', ()=>{
+  if(currentIndex >= timeline.length) goToIndex(0,false);
+  startTicker();
+});
+pauseBtn.addEventListener('click', ()=>{
+  stopTicker();
+});
+nextBtn.addEventListener('click', ()=>{
+  playChime();
+  goToIndex(currentIndex + 1, true);
+});
+restartBtn.addEventListener('click', ()=>{
+  stopTicker();
+  goToIndex(0,false);
+  statusLine.textContent = 'Ready to go — tap Start.';
+});
+
+// keyboard support for desktop testing
+document.addEventListener('keydown', (e)=>{
+  if(e.key === ' '){ e.preventDefault(); running? stopTicker() : startTicker(); }
+  if(e.key === 'n') goToIndex(currentIndex + 1, true);
+});
+
+// auto-update initial UI
+goToIndex(0,false);
+
+// Register service worker if available
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{/*ignore*/});
+}
+</script>
+</body>
+</html>
